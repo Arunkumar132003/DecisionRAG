@@ -80,9 +80,9 @@ DecisionRAG is a **production-grade Retrieval-Augmented Generation (RAG)** syste
 
 ## 🏗️ Architecture
 
-```
-
-```
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Arunkumar132003/DecisionRAG/main/assets/decisionrag_architecture_v2.svg" width="600"/>
+</div>
 
 ---
 
