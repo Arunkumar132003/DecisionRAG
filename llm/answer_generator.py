@@ -1,9 +1,12 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 from config import CHAT_MODEL
 from llm.prompts import ANSWER_PROMPT
 from models.analysis import AnswerAnalysis
 
+class RateLimitError(Exception):
+    pass
 
 class AnswerGenerator:
     """Generates a grounded answer and full analysis in a single LLM call."""
@@ -16,8 +19,11 @@ class AnswerGenerator:
 
     def generate(self, question: str, history: str, context: str) -> AnswerAnalysis:
         """Generate answer, citations, conflict detection and analysis together."""
-        return self.chain.invoke({
-            "question": question,
-            "history": history,
-            "context": context,
-        })
+        try:
+            return self.chain.invoke({
+                "question": question,
+                "history": history,
+                "context": context,
+            })
+        except (ResourceExhausted, ServiceUnavailable) as e:
+            raise RateLimitError(str(e)) from e

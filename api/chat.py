@@ -1,8 +1,9 @@
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Cookie, Response
+from fastapi import APIRouter, Cookie, Response, HTTPException
 from models.request import ChatRequest
 from services.chat_service import ChatService
+from llm.answer_generator import RateLimitError
 
 router = APIRouter()
 chat_service = ChatService()
@@ -17,4 +18,12 @@ def chat(
     if not session_id:
         session_id = uuid.uuid4().hex
         response.set_cookie(key="session_id", value=session_id, httponly=True)
-    return chat_service.chat(session_id=session_id, question=request.question)
+    try:
+        return chat_service.chat(session_id=session_id, question=request.question)
+    except RateLimitError:
+        raise HTTPException(
+            status_code=429,
+            detail="LLM rate limit reached. Please wait a moment and try again."
+        )
+    except Exception as e:
+        return {"Error": str(e)}
