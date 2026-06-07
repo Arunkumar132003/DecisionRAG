@@ -153,6 +153,12 @@ bash run.sh
 uvicorn app:app --reload --port 8000
 ```
 
+### 5. Access the UI on URL
+
+```bash
+http://127.0.0.1:8000/
+```
+
 ---
 
 ## 📁 Project Structure
@@ -196,8 +202,8 @@ DecisionRAG/
 │   ├── milvus.db
 │   └── audit.json
 │
-├── src/                        # Streamlit UI
-│   └── ui.py
+├── ui/                        
+│   └── index.html              # Web UI
 │
 └── volumes/                    # Docker volumes (gitignored)
     ├── etcd/
