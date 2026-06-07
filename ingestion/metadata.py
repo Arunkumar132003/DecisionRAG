@@ -7,8 +7,7 @@ STATUS_SCORE = {
     "legacy": 30,
     "draft": 20,
     "informal": 10,
-    "restricted": 0,
-    "evaluation_only": 0,
+    "restricted": 0
 }
 
 TYPE_SCORE = {
@@ -23,7 +22,6 @@ TYPE_SCORE = {
     "historical_rfp_response": 70,
     "customer_support_email": 10,
     "sensitive_data": 0,
-    "evaluation_dataset": 0,
     "general": 50,
 }
 

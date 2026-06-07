@@ -16,9 +16,9 @@ _SECRET_PATTERNS = [
 
 # Questions that are themselves asking for secrets — block before retrieval
 _SENSITIVE_REQUEST_PATTERNS = re.compile(
-    r'\b(api[_\s]?key|api[_\s]?token|access[_\s]?token|oauth[_\s]?token|secret[_\s]?key|'
-    r'private[_\s]?key|credential|password|passwd|bearer[_\s]?token|auth[_\s]?token|'
-    r'client[_\s]?secret|webhook[_\s]?secret|signing[_\s]?key|encryption[_\s]?key)\b',
+    r'\b(api\s+key|api\s+keys|api[_]key|api[_]token|access\s+token|oauth\s+token|secret\s+key|'
+    r'private\s+key|credential|password|passwd|bearer\s+token|auth\s+token|'
+    r'client\s+secret|webhook\s+secret|signing\s+key|encryption\s+key)\b',
     re.IGNORECASE,
 )
 

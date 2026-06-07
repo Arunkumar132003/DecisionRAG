@@ -1,6 +1,6 @@
 import re
 
-EXCLUDED_STATUSES = {"evaluation_only", "restricted"}
+EXCLUDED_STATUSES = {"restricted"}
 EXCLUDED_TYPES = {"sensitive_data", "evaluation_dataset"}
 
 COMMITMENT_PATTERNS = [

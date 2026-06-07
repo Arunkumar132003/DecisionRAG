@@ -37,6 +37,6 @@ class AnswerGenerator:
             data = json.loads(response.text)
             return AnswerAnalysis(**data)
         except ClientError as e:
-            if e.status_code == 429:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                 raise RateLimitError(str(e)) from e
             raise
