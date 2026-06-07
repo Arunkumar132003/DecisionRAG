@@ -40,7 +40,7 @@ PRICING_PATTERNS = [
 ]
 
 DATA_HANDLING_PATTERNS = [
-    r"\bdata\s+deletion\b", r"\bretention\b", r"\bpersonal\s+data\b",
+    r"\bdata\s+deletion\b", r"\bretention\s+polic\w*\b", r"\bdata\s+retention\b",
     r"\btraining\s+data\b", r"\bdata\s+transfer\b", r"\bsubprocessor\b",
 ]
 
@@ -58,28 +58,27 @@ class GovernanceService:
         Returns (requires_human_review, reason).
         Overrides LLM decision when deterministic rules trigger.
         """
-        combined = f"{question} {answer}"
         reasons = []
 
-        if _matches_any(combined, LEGAL_PATTERNS):
+        if _matches_any(question, LEGAL_PATTERNS):
             reasons.append("contains legal or contractual language")
 
-        if _matches_any(combined, COMPLIANCE_PATTERNS):
+        if _matches_any(question, COMPLIANCE_PATTERNS):
             reasons.append("involves compliance certifications or regulatory claims")
 
-        if _matches_any(combined, SECURITY_PATTERNS):
+        if _matches_any(question, SECURITY_PATTERNS):
             reasons.append("involves security policy or controls")
 
-        if _matches_any(combined, PRICING_PATTERNS):
+        if _matches_any(question, PRICING_PATTERNS):
             reasons.append("involves pricing or cost commitments")
 
-        if _matches_any(combined, DATA_HANDLING_PATTERNS):
+        if _matches_any(question, DATA_HANDLING_PATTERNS):
             reasons.append("involves data handling, deletion, or retention")
 
         if _matches_any(answer, SENSITIVE_DATA_PATTERNS):
             reasons.append("answer may expose sensitive or personal data")
 
-        if "informal" in source_statuses or "email" in source_statuses:
+        if ("informal" in source_statuses or "email" in source_statuses) and reasons:
             reasons.append("answer derived from informal or unapproved sources")
 
         if reasons:
