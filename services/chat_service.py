@@ -160,13 +160,6 @@ class ChatService:
         documents = self._filter_documents(documents)
 
         context = redact_context(self._build_context(documents))
-        print(f"\nQuestion: {question}")
-        print(f"Domain detected: {domain}")
-        print("=" * 60)
-        print(f"CHUNKS SENT TO LLM ({len(documents)} docs):")
-        print("=" * 60)
-        print(context)
-        print("=" * 60 + "\n")
 
         t_response_start = time.perf_counter()
         result = self.answer_generator.generate(question=question, history=history, context=context, api_key=api_key)
