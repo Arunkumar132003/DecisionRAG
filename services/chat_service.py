@@ -13,7 +13,7 @@ from config import CHAT_HISTORY_LIMIT, CHAT_MODEL
 from models.response import ChatResponse, SourceCitation
 
 
-EXCLUDED_STATUSES = {"evaluation_only", "restricted"}
+EXCLUDED_STATUSES = {"restricted"}
 EXCLUDED_TYPES = {"sensitive_data", "evaluation_dataset"}
 
 
@@ -150,10 +150,9 @@ class ChatService:
             return self._ambiguous_response(session_id, question, clarification)
 
         history = self.chat_history.format_history(session_id, limit=CHAT_HISTORY_LIMIT)
-        rewritten_query = self.query_rewriter.rewrite(question=question, history=history)
 
         t_retrieval_start = time.perf_counter()
-        documents = self.retriever.retrieve(rewritten_query)
+        documents = self.retriever.retrieve(question)
         retrieval_latency_ms = (time.perf_counter() - t_retrieval_start) * 1000
 
         domain = detect_domain(question)

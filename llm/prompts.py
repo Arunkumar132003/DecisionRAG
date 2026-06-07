@@ -34,7 +34,7 @@ Context (each block labeled with source, status, and authority score):
 Return a single structured output:
 - answer: grounded response based solely on context; refuse if evidence is missing
 - confidence_score: 0.0-1.0 reflecting how well the context supports the answer
-- risk_level: "low" | "medium" | "high"
+- risk_level: "low" | "medium" | "high" — always "high" if the question involves credentials, PII, personal data, employee information, phone numbers, addresses, financial data, or any request the system refused on privacy or security grounds
 - requires_human_review: true if governance rules above apply
 - reason_for_review: explanation if requires_human_review is true, else empty string
 - assumptions: list of assumptions made
