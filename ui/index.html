@@ -617,16 +617,32 @@ function setFile(f) {
 async function ingestDoc() {
   if (!selectedFile) { toast('Select a file first', 'error'); return; }
   const btn = document.getElementById('ingestBtn');
-  btn.disabled = true; btn.textContent = 'Uploading…';
+  const el = document.getElementById('ingestResult');
+  btn.disabled = true;
+
+  const steps = ['Uploading…', 'Parsing document…', 'Chunking…', 'Embedding…', 'Indexing…'];
+  let stepIdx = 0;
+  btn.textContent = steps[0];
+  const stepTimer = setInterval(() => {
+    stepIdx = Math.min(stepIdx + 1, steps.length - 1);
+    btn.textContent = steps[stepIdx];
+  }, 6000);
+
+  el.className = 'ingest-result';
+  el.innerHTML = '<span style="color:var(--muted)">Processing — this may take 30–90 seconds for large files…</span>';
+
   const fd = new FormData();
   fd.append('file', selectedFile);
   fd.append('doc_status', document.getElementById('docStatus').value);
   fd.append('doc_type', document.getElementById('docType').value);
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 300000);
+
   try {
-    const res = await fetch(API + '/ingest/', { method: 'POST', body: fd });
+    const res = await fetch(API + '/ingest/', { method: 'POST', body: fd, signal: controller.signal });
+    clearTimeout(timeout);
     const data = await res.json();
-    const el = document.getElementById('ingestResult');
     if (res.ok && data.status === 'success') {
       el.className = 'ingest-result success';
       el.innerHTML = `✓ <strong>${escHtml(data.file)}</strong> indexed — ${data.documents_indexed} chunks · status: ${data.doc_status} · type: ${data.doc_type}`;
@@ -637,8 +653,17 @@ async function ingestDoc() {
       toast('Ingestion failed', 'error');
     }
   } catch(e) {
-    toast('Network error: ' + e.message, 'error');
+    clearTimeout(timeout);
+    el.className = 'ingest-result error';
+    if (e.name === 'AbortError') {
+      el.textContent = '✕ Request timed out (>5 min). The file may be too large — try a smaller file.';
+      toast('Ingestion timed out', 'error');
+    } else {
+      el.textContent = '✕ ' + e.message;
+      toast('Network error: ' + e.message, 'error');
+    }
   } finally {
+    clearInterval(stepTimer);
     btn.disabled = false; btn.textContent = 'Upload & Index';
   }
 }
