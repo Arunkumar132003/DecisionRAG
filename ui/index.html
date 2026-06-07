@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Decision RAG</title>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --border: #1e2d47;
+      --accent: #3b82f6;
+      --accent2: #6366f1;
+      --accent-glow: rgba(59,130,246,0.15);
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --low: #10b981;
+      --medium: #f59e0b;
+      --high: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Top bar ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; height: 56px; border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0; z-index: 10;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; letter-spacing: .3px; }
+    .logo-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .nav { display: flex; gap: 4px; }
+    .nav-btn { background: none; border: none; color: var(--muted); padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; }
+    .nav-btn:hover { color: var(--text); background: var(--surface2); }
+    .nav-btn.active { color: var(--accent); background: var(--accent-glow); }
+    .api-key-wrap { display: flex; align-items: center; gap: 8px; }
+    .api-key-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 12px; font-size: 12px; width: 200px; outline: none; }
+    .api-key-input:focus { border-color: var(--accent); }
+    .api-key-label { font-size: 11px; color: var(--muted); }
+
+    /* ── Layout ── */
+    main { flex: 1; overflow: hidden; display: flex; }
+    .page { display: none; width: 100%; height: 100%; }
+    .page.active { display: flex; }
+
+    /* ══════════════════════════════
+       CHAT PAGE
+    ══════════════════════════════ */
+    .chat-page { flex-direction: column; }
+    .messages { flex: 1; overflow-y: auto; padding: 24px 0; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .msg-wrap { display: flex; gap: 12px; padding: 0 24px; max-width: 900px; margin: 0 auto; width: 100%; }
+    .msg-wrap.user { flex-direction: row-reverse; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+    .avatar.ai { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+    .avatar.user { background: var(--surface2); border: 1px solid var(--border); }
+
+    .bubble { max-width: 75%; }
+    .bubble-text { background: var(--surface2); border: 1px solid var(--border); border-radius: 16px; padding: 14px 18px; font-size: 14px; line-height: 1.65; }
+    .msg-wrap.user .bubble-text { background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; color: #fff; border-radius: 16px 4px 16px 16px; }
+    .msg-wrap.ai .bubble-text { border-radius: 4px 16px 16px 16px; }
+
+    /* Answer meta cards */
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+    .meta-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+    .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 4px; }
+    .meta-value { font-size: 13px; font-weight: 600; }
+    .risk-low { color: var(--low); }
+    .risk-medium { color: var(--medium); }
+    .risk-high { color: var(--high); }
+
+    .conf-bar-wrap { margin-top: 4px; background: var(--border); border-radius: 4px; height: 4px; width: 100%; }
+    .conf-bar { height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .4s ease; }
+
+    .citations { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .citation-tag { background: var(--accent-glow); border: 1px solid rgba(59,130,246,.3); color: var(--accent); font-size: 11px; padding: 3px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; }
+    .authority-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+    .review-badge { display: inline-flex; align-items: center; gap: 5px; background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: var(--danger); font-size: 11px; padding: 3px 10px; border-radius: 20px; margin-top: 8px; }
+    .conflict-badge { display: inline-flex; align-items: center; gap: 5px; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); color: var(--warning); font-size: 11px; padding: 3px 10px; border-radius: 20px; margin-top: 6px; }
+
+    .assumptions-list { margin-top: 10px; }
+    .assumptions-list summary { font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+    .assumptions-list ul { margin-top: 6px; padding-left: 16px; font-size: 12px; color: var(--muted); line-height: 1.8; }
+
+    /* Typing indicator */
+    .typing { display: flex; gap: 4px; padding: 14px 18px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px 16px 16px 16px; width: fit-content; }
+    .typing span { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: bounce 1.2s infinite; }
+    .typing span:nth-child(2) { animation-delay: .2s; }
+    .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+    /* Input bar */
+    .chat-input-bar { padding: 16px 24px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+    .input-inner { max-width: 900px; margin: 0 auto; display: flex; gap: 10px; align-items: flex-end; }
+    .chat-textarea { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 12px; padding: 12px 16px; font-size: 14px; resize: none; outline: none; min-height: 44px; max-height: 140px; line-height: 1.5; transition: border .15s; font-family: inherit; }
+    .chat-textarea:focus { border-color: var(--accent); }
+    .send-btn { width: 44px; height: 44px; border-radius: 12px; border: none; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: opacity .15s, transform .1s; }
+    .send-btn:hover { opacity: .9; }
+    .send-btn:active { transform: scale(.95); }
+    .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ══════════════════════════════
+       INGEST PAGE
+    ══════════════════════════════ */
+    .ingest-page { flex-direction: column; align-items: center; justify-content: flex-start; padding: 40px 24px; overflow-y: auto; }
+    .ingest-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px; width: 100%; max-width: 620px; }
+    .card-title { font-size: 16px; font-weight: 600; margin-bottom: 24px; }
+    .drop-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all .2s; margin-bottom: 20px; position: relative; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: var(--accent-glow); }
+    .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .drop-icon { font-size: 36px; margin-bottom: 12px; }
+    .drop-text { font-size: 14px; color: var(--muted); }
+    .drop-text strong { color: var(--text); }
+    .drop-filename { margin-top: 8px; font-size: 13px; color: var(--accent); font-weight: 500; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+    .form-select { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; cursor: pointer; transition: border .15s; }
+    .form-select:focus { border-color: var(--accent); }
+    .submit-btn { width: 100%; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+    .submit-btn:hover { opacity: .9; }
+    .submit-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .ingest-result { margin-top: 16px; padding: 14px 16px; border-radius: 10px; font-size: 13px; line-height: 1.6; }
+    .ingest-result.success { background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3); color: var(--success); }
+    .ingest-result.error { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: var(--danger); }
+
+    /* ══════════════════════════════
+       BATCH PAGE
+    ══════════════════════════════ */
+    .batch-page { flex-direction: column; align-items: center; padding: 40px 24px; overflow-y: auto; gap: 20px; }
+    .batch-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 780px; }
+    .batch-textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.7; resize: vertical; min-height: 140px; outline: none; font-family: inherit; transition: border .15s; }
+    .batch-textarea:focus { border-color: var(--accent); }
+    .batch-controls { display: flex; gap: 12px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+    .batch-controls .form-select { width: auto; }
+    .batch-btn { padding: 10px 24px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+    .batch-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .batch-hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .batch-results { width: 100%; max-width: 780px; display: flex; flex-direction: column; gap: 12px; }
+    .batch-row { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .batch-q { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--accent); }
+    .batch-a { font-size: 13px; line-height: 1.6; margin-bottom: 10px; }
+    .batch-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag { font-size: 11px; padding: 2px 10px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted); }
+    .export-bar { display: flex; gap: 10px; margin-top: 4px; }
+    .export-btn { padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 12px; cursor: pointer; transition: all .15s; }
+    .export-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ══════════════════════════════
+       REVIEW PAGE
+    ══════════════════════════════ */
+    .review-page { flex-direction: row; overflow: hidden; }
+    .review-list { width: 320px; flex-shrink: 0; border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+    .review-list-header { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .review-count { background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+    .review-item { padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; }
+    .review-item:hover { background: var(--surface2); }
+    .review-item.active { background: var(--accent-glow); border-left: 2px solid var(--accent); }
+    .review-item-q { font-size: 13px; font-weight: 500; margin-bottom: 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .review-item-meta { display: flex; gap: 8px; align-items: center; }
+    .review-status-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .dot-pending { background: var(--warning); }
+    .dot-approved { background: var(--success); }
+    .dot-rejected { background: var(--danger); }
+    .dot-edited { background: var(--accent); }
+    .review-item-time { font-size: 11px; color: var(--muted); }
+    .review-detail { flex: 1; overflow-y: auto; padding: 28px; }
+    .review-detail-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
+    .review-detail .section { margin-bottom: 20px; }
+    .review-detail .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 8px; }
+    .review-detail .section-text { font-size: 14px; line-height: 1.65; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+    .review-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .action-btn { padding: 9px 20px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+    .action-btn.approve { background: rgba(16,185,129,.15); color: var(--success); border: 1px solid rgba(16,185,129,.3); }
+    .action-btn.reject { background: rgba(239,68,68,.15); color: var(--danger); border: 1px solid rgba(239,68,68,.3); }
+    .action-btn.edit { background: rgba(99,102,241,.15); color: var(--accent2); border: 1px solid rgba(99,102,241,.3); }
+    .action-btn:hover { opacity: .8; }
+    .action-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .review-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+    .review-modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 480px; max-width: 95vw; }
+    .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
+    .modal-textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px 14px; font-size: 13px; resize: vertical; min-height: 100px; outline: none; font-family: inherit; transition: border .15s; }
+    .modal-textarea:focus { border-color: var(--accent); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+    .modal-cancel { padding: 9px 20px; border-radius: 8px; border: 1px solid var(--border); background: none; color: var(--muted); font-size: 13px; cursor: pointer; }
+    .modal-confirm { padding: 9px 20px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .filter-tabs { display: flex; gap: 4px; padding: 10px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .filter-tab { padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; border: none; background: none; color: var(--muted); transition: all .15s; }
+    .filter-tab.active { background: var(--accent-glow); color: var(--accent); }
+
+    /* ══════════════════════════════
+       AUDIT PAGE
+    ══════════════════════════════ */
+    .audit-page { flex-direction: column; padding: 24px; overflow-y: auto; gap: 12px; }
+    .audit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .audit-title { font-size: 16px; font-weight: 600; }
+    .refresh-btn { padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 12px; cursor: pointer; transition: all .15s; }
+    .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .audit-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { padding: 12px 16px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--surface2); font-weight: 500; }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .pill-low { background: rgba(16,185,129,.15); color: var(--low); }
+    .pill-medium { background: rgba(245,158,11,.15); color: var(--medium); }
+    .pill-high { background: rgba(239,68,68,.15); color: var(--high); }
+    .pill-pending { background: rgba(245,158,11,.15); color: var(--warning); }
+    .pill-approved { background: rgba(16,185,129,.15); color: var(--success); }
+    .pill-rejected { background: rgba(239,68,68,.15); color: var(--danger); }
+    .pill-edited { background: rgba(99,102,241,.15); color: var(--accent2); }
+    .empty-state { text-align: center; padding: 48px; color: var(--muted); font-size: 14px; }
+
+    /* Toast */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 200; }
+    .toast { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.4); animation: slideIn .2s ease; display: flex; align-items: center; gap: 10px; }
+    .toast.success { border-color: rgba(16,185,129,.4); }
+    .toast.error { border-color: rgba(239,68,68,.4); }
+    @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* Scrollbar global */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    DecisionRAG
+  </div>
+  <nav class="nav">
+    <button class="nav-btn active" onclick="showPage('chat', this)">Chat</button>
+    <button class="nav-btn" onclick="showPage('ingest', this)">Ingest</button>
+    <button class="nav-btn" onclick="showPage('batch', this)">Batch</button>
+    <button class="nav-btn" onclick="showPage('review', this)">Review</button>
+    <button class="nav-btn" onclick="showPage('audit', this)">Audit</button>
+  </nav>
+  <div class="api-key-wrap">
+    <span class="api-key-label">API Key</span>
+    <input class="api-key-input" type="password" id="globalApiKey" placeholder="Override server key (optional)" />
+  </div>
+</header>
+
+<main>
+
+  <!-- ── CHAT ── -->
+  <div class="page chat-page active" id="page-chat">
+    <div class="messages" id="messages">
+      <div class="msg-wrap ai">
+        <div class="avatar ai">N</div>
+        <div class="bubble">
+          <div class="bubble-text">Hello! I'm your Northstar Workflow Copilot. Ask me RFP, compliance, or vendor-diligence questions and I'll answer with citations, confidence scores, and source authority rankings.</div>
+        </div>
+      </div>
+    </div>
+    <div class="chat-input-bar">
+      <div class="input-inner">
+        <textarea class="chat-textarea" id="chatInput" rows="1" placeholder="Ask a compliance, RFP, or security question…" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── INGEST ── -->
+  <div class="page ingest-page" id="page-ingest">
+    <div class="ingest-card">
+      <div class="card-title">Upload Document</div>
+      <div class="drop-zone" id="dropZone" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.csv,.md" onchange="onFileSelect(event)" />
+        <div class="drop-icon">📄</div>
+        <div class="drop-text"><strong>Click to browse</strong> or drag & drop</div>
+        <div class="drop-text" style="margin-top:4px">PDF · DOCX · TXT · CSV · Markdown</div>
+        <div class="drop-filename" id="dropFilename"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Document Status</label>
+          <select class="form-select" id="docStatus">
+            <option value="approved">Approved</option>
+            <option value="approved_reference">Approved Reference</option>
+            <option value="legacy">Legacy</option>
+            <option value="draft">Draft</option>
+            <option value="informal">Informal</option>
+            <option value="restricted">Restricted</option>
+            <option value="evaluation_only">Evaluation Only</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Document Type</label>
+          <select class="form-select" id="docType">
+            <option value="general">General</option>
+            <option value="security_policy">Security Policy</option>
+            <option value="data_protection_addendum">Data Protection Addendum</option>
+            <option value="ai_policy">AI Policy</option>
+            <option value="product_faq">Product FAQ</option>
+            <option value="pricing_implementation_note">Pricing / Implementation Note</option>
+            <option value="company_overview">Company Overview</option>
+            <option value="integration_matrix">Integration Matrix</option>
+            <option value="release_notes">Release Notes</option>
+            <option value="historical_rfp_response">Historical RFP Response</option>
+            <option value="customer_support_email">Customer Support Email</option>
+            <option value="sensitive_data">Sensitive Data</option>
+            <option value="evaluation_dataset">Evaluation Dataset</option>
+          </select>
+        </div>
+      </div>
+      <button class="submit-btn" id="ingestBtn" onclick="ingestDoc()">Upload & Index</button>
+      <div id="ingestResult"></div>
+    </div>
+  </div>
+
+  <!-- ── BATCH ── -->
+  <div class="page batch-page" id="page-batch">
+    <div class="batch-card">
+      <div class="card-title">Batch Processing</div>
+      <textarea class="batch-textarea" id="batchInput" placeholder="Enter one question per line (max 10)…"></textarea>
+      <div class="batch-hint">One question per line · Max 10 questions per batch</div>
+      <div class="batch-controls">
+        <select class="form-select" id="batchFormat">
+          <option value="json">Export JSON</option>
+          <option value="csv">Export CSV</option>
+        </select>
+        <button class="batch-btn" id="batchBtn" onclick="runBatch()">Run Batch</button>
+      </div>
+    </div>
+    <div class="batch-results" id="batchResults"></div>
+  </div>
+
+  <!-- ── REVIEW ── -->
+  <div class="page review-page" id="page-review">
+    <div class="review-list">
+      <div class="review-list-header">
+        Pending Review <span class="review-count" id="pendingCount">0</span>
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="setReviewFilter('pending', this)">Pending</button>
+        <button class="filter-tab" onclick="setReviewFilter('all', this)">All</button>
+      </div>
+      <div id="reviewList"></div>
+    </div>
+    <div id="reviewDetail" class="review-detail-empty">Select a record to review</div>
+  </div>
+
+  <!-- ── AUDIT ── -->
+  <div class="page audit-page" id="page-audit">
+    <div class="audit-header">
+      <div class="audit-title">Audit Trail</div>
+      <button class="refresh-btn" onclick="loadAudit()">↻ Refresh</button>
+    </div>
+    <div class="audit-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Question</th>
+            <th>Confidence</th>
+            <th>Risk</th>
+            <th>Review Status</th>
+            <th>Model</th>
+            <th>Latency</th>
+          </tr>
+        </thead>
+        <tbody id="auditBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- Modal -->
+<div class="review-modal-overlay" id="modalOverlay" style="display:none">
+  <div class="review-modal">
+    <div class="modal-title" id="modalTitle">Action</div>
+    <textarea class="modal-textarea" id="modalComment" placeholder="Comment (required for rejection)…"></textarea>
+    <textarea class="modal-textarea" id="modalFinalAnswer" placeholder="Edited final answer…" style="display:none;margin-top:10px"></textarea>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-confirm" id="modalConfirm" onclick="confirmModal()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rate limit popup -->
+<div class="review-modal-overlay" id="rateLimitOverlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="review-modal" style="max-width:440px;text-align:center">
+    <div style="font-size:36px;margin-bottom:12px">⚠️</div>
+    <div class="modal-title">API Rate Limit Reached</div>
+    <p style="font-size:13px;color:var(--muted);margin:12px 0 20px;line-height:1.6">
+      The server's free quota is exhausted.<br>Enter your own Google API key to continue.
+    </p>
+    <input id="rateLimitKeyInput" type="password"
+      style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 14px;font-size:13px;font-family:monospace;outline:none;margin-bottom:8px"
+      placeholder="AIza…"
+      onkeydown="if(event.key==='Enter')applyRateLimitKey()" />
+    <p style="font-size:11px;color:var(--muted);margin-bottom:16px">Your key is sent only with your requests and never stored.</p>
+    <div class="modal-actions" style="justify-content:center">
+      <button class="modal-cancel" onclick="document.getElementById('rateLimitOverlay').style.display='none'">Cancel</button>
+      <button class="modal-confirm" onclick="applyRateLimitKey()">Use this key &amp; retry</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const API = '';
+let reviewFilter = 'pending';
+let activeReviewId = null;
+let modalAction = null;
+let selectedFile = null;
+
+// ── Navigation ──
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'review') loadReview();
+  if (name === 'audit') loadAudit();
+}
+
+// ── Toast ──
+function toast(msg, type = 'success') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.innerHTML = (type === 'success' ? '✓' : '✕') + ' ' + msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+// ── API key helper ──
+function apiKey() { return document.getElementById('globalApiKey').value.trim() || null; }
+
+// ════════════════════════
+// CHAT
+// ════════════════════════
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function appendUserMsg(text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-wrap user';
+  wrap.innerHTML = `<div class="avatar user">U</div><div class="bubble"><div class="bubble-text">${escHtml(text)}</div></div>`;
+  document.getElementById('messages').appendChild(wrap);
+  scrollChat();
+  return wrap;
+}
+
+function appendTyping() {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-wrap ai';
+  wrap.id = 'typingIndicator';
+  wrap.innerHTML = `<div class="avatar ai">N</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  document.getElementById('messages').appendChild(wrap);
+  scrollChat();
+}
+
+function removeTyping() {
+  const t = document.getElementById('typingIndicator');
+  if (t) t.remove();
+}
+
+function riskClass(r) { return 'risk-' + (r || 'low'); }
+
+function appendAIMsg(data) {
+  const conf = Math.round((data.confidence_score || 0) * 100);
+  const citations = (data.source_citations || []).map(c =>
+    `<span class="citation-tag"><span class="authority-dot"></span>${escHtml(c.source)} <span style="opacity:.6">(${c.authority_score})</span></span>`
+  ).join('');
+
+  const assumptions = (data.assumptions || []).length ? `
+    <details class="assumptions-list">
+      <summary>Assumptions (${data.assumptions.length}) · Missing info (${(data.missing_information||[]).length})</summary>
+      <ul>${data.assumptions.map(a => `<li>${escHtml(a)}</li>`).join('')}
+          ${(data.missing_information||[]).map(m => `<li style="color:#ef4444">⚠ ${escHtml(m)}</li>`).join('')}
+      </ul>
+    </details>` : '';
+
+  const reviewBadge = data.requires_human_review
+    ? `<div class="review-badge">⚑ Human review required · ${escHtml(data.reason_for_review||'')}</div>` : '';
+
+  const conflictBadge = data.conflicts_detected
+    ? `<div class="conflict-badge">⚡ Conflict: ${escHtml(data.conflict_explanation||'')}</div>` : '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-wrap ai';
+  wrap.innerHTML = `
+    <div class="avatar ai">N</div>
+    <div class="bubble">
+      <div class="bubble-text">${escHtml(data.answer||'')}</div>
+      <div class="meta-grid">
+        <div class="meta-card">
+          <div class="meta-label">Confidence</div>
+          <div class="meta-value">${conf}%</div>
+          <div class="conf-bar-wrap"><div class="conf-bar" style="width:${conf}%"></div></div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">Risk</div>
+          <div class="meta-value ${riskClass(data.risk_level)}">${(data.risk_level||'low').toUpperCase()}</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">Next Action</div>
+          <div class="meta-value" style="font-size:11px;font-weight:400;line-height:1.4">${escHtml(data.recommended_next_action||'—')}</div>
+        </div>
+      </div>
+      ${citations ? `<div class="citations">${citations}</div>` : ''}
+      ${reviewBadge}${conflictBadge}${assumptions}
+    </div>`;
+  document.getElementById('messages').appendChild(wrap);
+  scrollChat();
+}
+
+function scrollChat() {
+  const m = document.getElementById('messages');
+  m.scrollTop = m.scrollHeight;
+}
+
+async function sendMessage() {
+  const inp = document.getElementById('chatInput');
+  const q = inp.value.trim();
+  if (!q) return;
+  window._lastQuestion = q;
+  inp.value = '';
+  inp.style.height = 'auto';
+  document.getElementById('sendBtn').disabled = true;
+  appendUserMsg(q);
+  appendTyping();
+
+  try {
+    const body = { question: q };
+    const key = apiKey();
+    if (key) body.api_key = key;
+
+    const res = await fetch(API + '/chat/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    });
+    removeTyping();
+    if (res.status === 429) { showRateLimitPopup(); return; }
+    if (!res.ok) { appendErrorMsg('Server error ' + res.status); return; }
+    const data = await res.json();
+    appendAIMsg(data);
+  } catch(e) {
+    removeTyping();
+    appendErrorMsg('Network error: ' + e.message);
+  } finally {
+    document.getElementById('sendBtn').disabled = false;
+    inp.focus();
+  }
+}
+
+function appendErrorMsg(msg) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-wrap ai';
+  wrap.innerHTML = `<div class="avatar ai">N</div><div class="bubble"><div class="bubble-text" style="color:var(--danger)">⚠ ${escHtml(msg)}</div></div>`;
+  document.getElementById('messages').appendChild(wrap);
+  scrollChat();
+}
+
+function showRateLimitPopup() {
+  document.getElementById('rateLimitOverlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('rateLimitKeyInput').focus(), 100);
+}
+
+function applyRateLimitKey() {
+  const key = document.getElementById('rateLimitKeyInput').value.trim();
+  if (!key) { toast('Paste a valid API key first', 'error'); return; }
+  document.getElementById('globalApiKey').value = key;
+  document.getElementById('rateLimitOverlay').style.display = 'none';
+  document.getElementById('rateLimitKeyInput').value = '';
+  if (window._lastQuestion) {
+    document.getElementById('chatInput').value = window._lastQuestion;
+    autoResize(document.getElementById('chatInput'));
+  }
+  toast('API key applied — hit Send to retry');
+  document.getElementById('chatInput').focus();
+}
+
+// ════════════════════════
+// INGEST
+// ════════════════════════
+function onDragOver(e) { e.preventDefault(); document.getElementById('dropZone').classList.add('drag-over'); }
+function onDragLeave(e) { document.getElementById('dropZone').classList.remove('drag-over'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+}
+function onFileSelect(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
+function setFile(f) {
+  selectedFile = f;
+  document.getElementById('dropFilename').textContent = '📎 ' + f.name;
+}
+
+async function ingestDoc() {
+  if (!selectedFile) { toast('Select a file first', 'error'); return; }
+  const btn = document.getElementById('ingestBtn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+  fd.append('doc_status', document.getElementById('docStatus').value);
+  fd.append('doc_type', document.getElementById('docType').value);
+
+  try {
+    const res = await fetch(API + '/ingest/', { method: 'POST', body: fd });
+    const data = await res.json();
+    const el = document.getElementById('ingestResult');
+    if (res.ok && data.status === 'success') {
+      el.className = 'ingest-result success';
+      el.innerHTML = `✓ <strong>${escHtml(data.file)}</strong> indexed — ${data.documents_indexed} chunks · status: ${data.doc_status} · type: ${data.doc_type}`;
+      toast('Document indexed successfully');
+    } else {
+      el.className = 'ingest-result error';
+      el.textContent = '✕ ' + (data.detail || data.error || JSON.stringify(data));
+      toast('Ingestion failed', 'error');
+    }
+  } catch(e) {
+    toast('Network error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Upload & Index';
+  }
+}
+
+// ════════════════════════
+// BATCH
+// ════════════════════════
+async function runBatch() {
+  const lines = document.getElementById('batchInput').value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) { toast('Enter at least one question', 'error'); return; }
+  if (lines.length > 10) { toast('Max 10 questions per batch', 'error'); return; }
+
+  const btn = document.getElementById('batchBtn');
+  btn.disabled = true; btn.textContent = 'Processing…';
+  const fmt = document.getElementById('batchFormat').value;
+  document.getElementById('batchResults').innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:24px">Processing ' + lines.length + ' questions…</div>';
+
+  try {
+    const res = await fetch(API + '/batch/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questions: lines, export_format: fmt }),
+    });
+
+    if (fmt === 'csv') {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'batch_results.csv'; a.click();
+      document.getElementById('batchResults').innerHTML = '<div style="color:var(--success);font-size:13px;text-align:center;padding:24px">✓ CSV downloaded</div>';
+      toast('Batch CSV downloaded');
+      return;
+    }
+
+    const results = await res.json();
+    renderBatchResults(results);
+    toast('Batch complete — ' + results.length + ' answers');
+  } catch(e) {
+    toast('Batch error: ' + e.message, 'error');
+    document.getElementById('batchResults').innerHTML = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Run Batch';
+  }
+}
+
+function renderBatchResults(results) {
+  const container = document.getElementById('batchResults');
+  if (!results.length) { container.innerHTML = ''; return; }
+  container.innerHTML = results.map((r, i) => `
+    <div class="batch-row">
+      <div class="batch-q">${i+1}. ${escHtml(r.question)}</div>
+      <div class="batch-a">${escHtml(r.answer)}</div>
+      <div class="batch-tags">
+        <span class="tag">Confidence: ${Math.round((r.confidence_score||0)*100)}%</span>
+        <span class="tag ${r.risk_level === 'high' ? 'risk-high' : r.risk_level === 'medium' ? 'risk-medium' : ''}">Risk: ${r.risk_level||'low'}</span>
+        ${r.requires_human_review ? '<span class="tag" style="color:var(--danger)">Review required</span>' : ''}
+        ${(r.source_citations||[]).map(c => `<span class="tag" style="color:var(--accent)">${escHtml(c.source)}</span>`).join('')}
+      </div>
+    </div>`).join('');
+
+  // JSON export button
+  const exportBar = document.createElement('div');
+  exportBar.className = 'export-bar';
+  exportBar.innerHTML = '<button class="export-btn" onclick="exportJSON()">↓ Download JSON</button>';
+  container.prepend(exportBar);
+  window._batchResults = results;
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(window._batchResults, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'batch_results.json'; a.click();
+}
+
+// ════════════════════════
+// REVIEW
+// ════════════════════════
+async function loadReview() {
+  const endpoint = reviewFilter === 'pending' ? '/review/pending' : '/review/all';
+  try {
+    const res = await fetch(API + endpoint);
+    const data = await res.json();
+    renderReviewList(data);
+    document.getElementById('pendingCount').textContent =
+      reviewFilter === 'pending' ? data.length : data.filter(r => r.review_status === 'pending' && r.requires_human_review).length;
+  } catch(e) { toast('Failed to load reviews', 'error'); }
+}
+
+function setReviewFilter(f, btn) {
+  reviewFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadReview();
+}
+
+function renderReviewList(items) {
+  const el = document.getElementById('reviewList');
+  if (!items.length) { el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No records</div>'; return; }
+  el.innerHTML = items.map(r => `
+    <div class="review-item ${r.id === activeReviewId ? 'active' : ''}" onclick="openReview('${r.id}', this)">
+      <div class="review-item-q">${escHtml(r.question)}</div>
+      <div class="review-item-meta">
+        <span class="review-status-dot dot-${r.review_status||'pending'}"></span>
+        <span class="review-item-time">${fmtTime(r.created_at)}</span>
+        <span class="pill pill-${r.risk_level||'low'}" style="font-size:10px">${r.risk_level||'low'}</span>
+      </div>
+    </div>`).join('');
+}
+
+async function openReview(id, el) {
+  activeReviewId = id;
+  document.querySelectorAll('.review-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  const res = await fetch(API + '/review/' + id);
+  const r = await res.json();
+  renderReviewDetail(r);
+}
+
+function renderReviewDetail(r) {
+  const isDone = r.review_status !== 'pending';
+  const detail = document.getElementById('reviewDetail');
+  detail.className = 'review-detail';
+  detail.innerHTML = `
+    <div class="section">
+      <div class="section-label">Question</div>
+      <div class="section-text">${escHtml(r.question)}</div>
+    </div>
+    <div class="section">
+      <div class="section-label">AI Answer</div>
+      <div class="section-text">${escHtml(r.answer)}</div>
+    </div>
+    <div class="meta-grid" style="margin-bottom:16px">
+      <div class="meta-card"><div class="meta-label">Confidence</div><div class="meta-value">${Math.round((r.confidence_score||0)*100)}%</div></div>
+      <div class="meta-card"><div class="meta-label">Risk</div><div class="meta-value ${riskClass(r.risk_level)}">${(r.risk_level||'low').toUpperCase()}</div></div>
+      <div class="meta-card"><div class="meta-label">Status</div><div class="meta-value"><span class="pill pill-${r.review_status||'pending'}">${r.review_status||'pending'}</span></div></div>
+    </div>
+    ${r.reason_for_review ? `<div class="section"><div class="section-label">Reason for Review</div><div class="section-text">${escHtml(r.reason_for_review)}</div></div>` : ''}
+    ${r.reviewer_comment ? `<div class="section"><div class="section-label">Reviewer Comment</div><div class="section-text">${escHtml(r.reviewer_comment)}</div></div>` : ''}
+    ${r.final_answer ? `<div class="section"><div class="section-label">Final Answer</div><div class="section-text" style="border-color:rgba(16,185,129,.3)">${escHtml(r.final_answer)}</div></div>` : ''}
+    <div class="review-actions">
+      <button class="action-btn approve" ${isDone ? 'disabled' : ''} onclick="reviewAction('approve', '${r.id}')">✓ Approve</button>
+      <button class="action-btn reject" ${isDone ? 'disabled' : ''} onclick="reviewAction('reject', '${r.id}')">✕ Reject</button>
+      <button class="action-btn edit" ${isDone ? 'disabled' : ''} onclick="reviewAction('edit', '${r.id}')">✎ Edit & Approve</button>
+    </div>`;
+}
+
+function reviewAction(action, id) {
+  modalAction = { action, id };
+  document.getElementById('modalTitle').textContent =
+    action === 'approve' ? 'Approve Answer' : action === 'reject' ? 'Reject Answer' : 'Edit & Approve';
+  document.getElementById('modalComment').value = '';
+  document.getElementById('modalFinalAnswer').value = '';
+  document.getElementById('modalFinalAnswer').style.display = action === 'edit' ? 'block' : 'none';
+  document.getElementById('modalOverlay').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; modalAction = null; }
+
+async function confirmModal() {
+  if (!modalAction) return;
+  const { action, id } = modalAction;
+  const comment = document.getElementById('modalComment').value.trim();
+  const finalAnswer = document.getElementById('modalFinalAnswer').value.trim();
+
+  if (action === 'reject' && !comment) { toast('Comment is required for rejection', 'error'); return; }
+  if (action === 'edit' && !finalAnswer) { toast('Final answer is required for edit', 'error'); return; }
+
+  const body = {};
+  if (comment) body.comment = comment;
+  if (finalAnswer) body.final_answer = finalAnswer;
+
+  try {
+    const res = await fetch(API + '/review/' + id + '/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) { const d = await res.json(); toast(d.detail || 'Error', 'error'); return; }
+    toast('Answer ' + action + 'd successfully');
+    closeModal();
+    loadReview();
+    activeReviewId = null;
+    document.getElementById('reviewDetail').className = 'review-detail-empty';
+    document.getElementById('reviewDetail').textContent = 'Select a record to review';
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ════════════════════════
+// AUDIT
+// ════════════════════════
+async function loadAudit() {
+  try {
+    const res = await fetch(API + '/review/all');
+    const data = await res.json();
+    renderAudit(data.reverse());
+  } catch(e) { toast('Failed to load audit trail', 'error'); }
+}
+
+function renderAudit(records) {
+  const body = document.getElementById('auditBody');
+  if (!records.length) {
+    body.innerHTML = '<tr><td colspan="7"><div class="empty-state">No audit records yet</div></td></tr>';
+    return;
+  }
+  body.innerHTML = records.map(r => `
+    <tr>
+      <td style="color:var(--muted)">${fmtTime(r.created_at)}</td>
+      <td title="${escHtml(r.question)}">${escHtml(r.question)}</td>
+      <td>${Math.round((r.confidence_score||0)*100)}%</td>
+      <td><span class="pill pill-${r.risk_level||'low'}">${r.risk_level||'low'}</span></td>
+      <td><span class="pill pill-${r.review_status||'pending'}">${r.review_status||'pending'}</span></td>
+      <td style="color:var(--muted)">${escHtml(r.model_used||'—')}</td>
+      <td style="color:var(--muted)">${r.response_latency_ms ? Math.round(r.response_latency_ms)+'ms' : '—'}</td>
+    </tr>`).join('');
+}
+
+// ════════════════════════
+// UTILS
+// ════════════════════════
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+</script>
+</body>
+</html>

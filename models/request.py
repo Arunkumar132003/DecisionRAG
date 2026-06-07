@@ -1,7 +1,9 @@
+from typing import Optional
 from pydantic import BaseModel, field_validator
 
 class ChatRequest(BaseModel):
     question: str
+    api_key: Optional[str] = None
 
     @field_validator("question")
     @classmethod
