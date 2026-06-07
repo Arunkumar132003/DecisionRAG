@@ -19,11 +19,11 @@ def chat(
         session_id = uuid.uuid4().hex
         response.set_cookie(key="session_id", value=session_id, httponly=True)
     try:
-        return chat_service.chat(session_id=session_id, question=request.question)
+        return chat_service.chat(session_id=session_id, question=request.question, api_key=request.api_key)
     except RateLimitError:
         raise HTTPException(
             status_code=429,
             detail="LLM rate limit reached. Please wait a moment and try again."
         )
     except Exception as e:
-        return {"Error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))

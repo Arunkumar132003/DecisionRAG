@@ -8,6 +8,7 @@ from retrieval.domain_filter import detect_domain, rerank_by_domain
 from services.audit_service import AuditService
 from services.governance_service import GovernanceService
 from services.ambiguity_service import AmbiguityService
+from services.secret_redactor import is_sensitive_request, redact_context, BLOCKED_RESPONSE
 from config import CHAT_HISTORY_LIMIT, CHAT_MODEL
 from models.response import ChatResponse, SourceCitation
 
@@ -102,6 +103,24 @@ class ChatService:
 
         return max(0.0, min(1.0, round(base, 2)))
 
+    def _blocked_response(self, session_id: str, question: str, message: str) -> ChatResponse:
+        """Return a security refusal without hitting retrieval or LLM."""
+        return ChatResponse(
+            question=question,
+            answer=message,
+            confidence_score=1.0,
+            source_citations=[],
+            risk_level="high",
+            requires_human_review=True,
+            reason_for_review="Question requests sensitive credentials or secrets",
+            assumptions=[],
+            missing_information=[],
+            recommended_next_action="Contact your system administrator for secure access credentials.",
+            conflicts_detected=False,
+            conflict_explanation="",
+            session_id=session_id,
+        )
+
     def _ambiguous_response(self, session_id: str, question: str, message: str) -> ChatResponse:
         """Return a clarification request without hitting retrieval or LLM."""
         return ChatResponse(
@@ -120,8 +139,11 @@ class ChatService:
             session_id=session_id,
         )
 
-    def chat(self, session_id: str, question: str) -> ChatResponse:
+    def chat(self, session_id: str, question: str, api_key: str = None) -> ChatResponse:
         """Execute complete RAG pipeline with ambiguity check, authority-aware retrieval, and governance."""
+
+        if is_sensitive_request(question):
+            return self._blocked_response(session_id, question, BLOCKED_RESPONSE)
 
         is_ambiguous, clarification = self.ambiguity.check(question)
         if is_ambiguous:
@@ -138,7 +160,7 @@ class ChatService:
         documents = rerank_by_domain(documents, domain)
         documents = self._filter_documents(documents)
 
-        context = self._build_context(documents)
+        context = redact_context(self._build_context(documents))
         print(f"\nQuestion: {question}")
         print(f"Domain detected: {domain}")
         print("=" * 60)
@@ -148,7 +170,7 @@ class ChatService:
         print("=" * 60 + "\n")
 
         t_response_start = time.perf_counter()
-        result = self.answer_generator.generate(question=question, history=history, context=context)
+        result = self.answer_generator.generate(question=question, history=history, context=context, api_key=api_key)
         response_latency_ms = (time.perf_counter() - t_response_start) * 1000
 
         source_statuses = [d.metadata.get("doc_status", "unknown") for d in documents]
