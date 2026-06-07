@@ -11,7 +11,6 @@
 [![LangChain](https://img.shields.io/badge/LangChain-0.3-1C3C3C?style=flat-square&logo=langchain&logoColor=white)](https://langchain.com)
 [![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-4285F4?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev)
 [![Milvus](https://img.shields.io/badge/Milvus-2.6-00A1EA?style=flat-square&logo=milvus&logoColor=white)](https://milvus.io)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 ---
@@ -148,8 +147,6 @@ pip install -r requirements.txt
 ### 4. Run the API
 
 ```bash
-bash run.sh
-# or directly:
 uvicorn app:app --reload --port 8000
 ```
 
